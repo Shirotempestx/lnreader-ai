@@ -1,7 +1,7 @@
 name: Build Custom APK
 
 on:
-  workflow_dispatch: # This creates the manual "Run workflow" button in GitHub!
+  workflow_dispatch:
 
 jobs:
   build:
@@ -19,7 +19,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v3
@@ -29,11 +29,17 @@ jobs:
       - name: Install Dependencies
         run: pnpm install
 
-      - name: Build Android APK
-        run: pnpm run build:release:android
+      - name: Generate Env Files
+        run: pnpm run generate:env:debug || true
+
+      - name: Expo Prebuild (Generates the Android folder)
+        run: npx expo prebuild --platform android
+
+      - name: Compile Debug APK
+        run: cd android && ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: my-ai-reader-apk
-          path: android/app/build/outputs/apk/release/*.apk
+          path: android/app/build/outputs/apk/debug/*.apk
