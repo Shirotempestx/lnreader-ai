@@ -86,6 +86,7 @@ export type SettingsStackParamList = {
   CustomCode: undefined;
   CodeSnippets: { snippetIndex: number; isJS: boolean } | undefined;
   GenreTaxonomy: undefined;
+  AiTranslationSettings: undefined;
 };
 
 export type NovelScreenProps = NativeStackScreenProps<
@@ -205,6 +206,10 @@ export type CustomCodeSettingsScreenProps = NativeStackScreenProps<
 export type CodeSnippetsScreenProps = NativeStackScreenProps<
   SettingsStackParamList,
   'CodeSnippets'
+>;
+export type AiTranslationSettingsScreenProps = NativeStackScreenProps<
+  SettingsStackParamList,
+  'AiTranslationSettings'
 >;
 
 declare global {

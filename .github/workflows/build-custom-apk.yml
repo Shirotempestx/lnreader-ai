@@ -19,7 +19,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '20' # Rolled back to Expo's preferred LTS version
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v3
@@ -32,11 +32,13 @@ jobs:
       - name: Generate Env Files
         run: pnpm run generate:env:debug || true
 
-      - name: Expo Prebuild (Generates the Android folder)
+      - name: Expo Prebuild (Generates Android folder)
         run: npx expo prebuild --platform android
 
       - name: Compile Debug APK
-        run: cd android && ./gradlew assembleDebug
+        env:
+          NODE_OPTIONS: '--max-old-space-size=8192' # Forces Node to use maximum available runner memory
+        run: cd android && ./gradlew assembleDebug --stacktrace # Stacktrace will reveal exact JS errors
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

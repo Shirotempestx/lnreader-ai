@@ -13,7 +13,7 @@ import {
   useLibrarySettings,
   useTrackedNovel,
   useTracker,
-} from '@hooks/persisted';
+ getAiTranslationSettings } from '@hooks/persisted';
 import { fetchChapter, fetchPage } from '@services/plugin/fetch';
 import { NOVEL_STORAGE } from '@utils/Storages';
 import {
@@ -38,6 +38,12 @@ import NativeFile from '@modules/native-file';
 import { useNovelActions, useNovelValue } from '@screens/novel/NovelContext';
 import useTimeTracking from './useTimeTracking';
 import { useEventListener } from 'expo';
+import { translateChapterHtml } from '@services/aiTranslation/aiTranslationService';
+import {
+  getTranslationCache,
+  setTranslationCache,
+} from '@services/aiTranslation/translationCache';
+
 
 type AdjacentChapters = [
   nextChapter: ChapterInfo | undefined,
@@ -65,6 +71,15 @@ export default function useChapter(
   const [chapter, setChapter] = useState(initialChapter);
   const [loading, setLoading] = useState(true);
   const [chapterText, setChapterText] = useState('');
+
+  /** Whether an AI translation is currently in progress. */
+  const [translating, setTranslating] = useState(false);
+  /** Translated HTML text; null means translation not yet run or failed. */
+  const [translatedChapterText, setTranslatedChapterText] = useState<
+    string | null
+  >(null);
+  /** Stable ref so async translation can check staleness. */
+  const translationChapterIdRef = useRef<number | null>(null);
 
   const [[nextChapter, prevChapter], setAdjacentChapter] =
     useState<AdjacentChapters>(NO_ADJACENT_CHAPTERS);
@@ -335,8 +350,41 @@ export default function useChapter(
         const chap = dbChapter ?? requested;
         setChapter(chap);
         setChapterText(html);
+        // Reset translation state when navigating to a new chapter
+        setTranslatedChapterText(null);
+        setTranslating(false);
         setAdjacentChapter(NO_ADJACENT_CHAPTERS);
         setLoading(false);
+
+        // Auto-translate on chapter load if the setting is enabled and a
+        // cached translation already exists — zero API cost.
+        const cachedTranslation = getTranslationCache(chap.id);
+        if (cachedTranslation) {
+          setTranslatedChapterText(cachedTranslation);
+        } else {
+          const aiSettings = getAiTranslationSettings();
+          if (aiSettings.enableForReading) {
+            // Kick off translation in the background without blocking paint.
+            translationChapterIdRef.current = chap.id;
+            setTranslating(true);
+            translateChapterHtml(html)
+              .then(translated => {
+                if (translationChapterIdRef.current !== chap.id) {
+                  return; // stale — user already navigated away
+                }
+                setTranslatedChapterText(translated);
+                setTranslationCache(chap.id, translated);
+              })
+              .catch(() => {
+                // Translation failed gracefully — original text stays visible
+              })
+              .finally(() => {
+                if (translationChapterIdRef.current === chap.id) {
+                  setTranslating(false);
+                }
+              });
+          }
+        }
 
         void resolveAdjacentChapters(chap, loadId);
       } catch (e: any) {
@@ -503,6 +551,47 @@ export default function useChapter(
   }, [getChapter]);
 
   /**
+   * Manually trigger AI translation for the current chapter.
+   * Checks the cache first; falls back to calling the AI service.
+   * Safe to call when already translating — it no-ops.
+   */
+  const triggerTranslation = useCallback(() => {
+    const chap = chapterRef.current;
+    const cached = getTranslationCache(chap.id);
+    if (cached) {
+      setTranslatedChapterText(cached);
+      return;
+    }
+    if (translating) {
+      return;
+    }
+    translationChapterIdRef.current = chap.id;
+    setTranslating(true);
+    translateChapterHtml(chapterText)
+      .then(translated => {
+        if (translationChapterIdRef.current !== chap.id) {
+          return;
+        }
+        setTranslatedChapterText(translated);
+        setTranslationCache(chap.id, translated);
+      })
+      .catch(() => {
+        showToast('Translation failed. Check your API keys.');
+      })
+      .finally(() => {
+        if (translationChapterIdRef.current === chap.id) {
+          setTranslating(false);
+        }
+      });
+  }, [chapterText, translating]);
+
+  /** Discard the cached translation and revert to original text. */
+  const clearTranslation = useCallback(() => {
+    setTranslatedChapterText(null);
+    setTranslating(false);
+  }, []);
+
+  /**
    * Everything except `hidden`, which toggles on every tap on the page. Keeping
    * it out of this object is what lets the WebView, the drawer and the searchbar
    * skip re-rendering when the reader UI is shown or hidden.
@@ -515,6 +604,10 @@ export default function useChapter(
       error,
       loading,
       chapterText,
+      translating,
+      translatedChapterText,
+      triggerTranslation,
+      clearTranslation,
       setHidden,
       saveProgress,
       hideHeader,
@@ -536,6 +629,10 @@ export default function useChapter(
       error,
       loading,
       chapterText,
+      translating,
+      translatedChapterText,
+      triggerTranslation,
+      clearTranslation,
       saveProgress,
       hideHeader,
       navigateChapter,

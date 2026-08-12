@@ -17,6 +17,9 @@ import type {
 import NativeFile from '@modules/native-file';
 import { eq } from 'drizzle-orm';
 import { parseDownloadCheckpoint } from './downloadCheckpoint';
+import { translateChapterHtml } from '@services/aiTranslation/aiTranslationService';
+import { setTranslationCache } from '@services/aiTranslation/translationCache';
+import { getAiTranslationSettings } from '@hooks/persisted/useAiTranslation';
 
 const createChapterFolder = async (
   path: string,
@@ -90,6 +93,20 @@ const downloadChapter = async (chapterId: number) => {
         .where(eq(chapterSchema.id, chapter.id))
         .run();
     });
+
+    // Translate and cache the downloaded chapter text if the feature is on.
+    // The extra delay is applied AFTER the translation request so each chapter
+    // (fetch + translate + delay) is fully sequential, respecting RPM limits.
+    const aiSettings = getAiTranslationSettings();
+    if (aiSettings.enableForDownload) {
+      try {
+        const translatedHtml = await translateChapterHtml(chapterText);
+        setTranslationCache(chapter.id, translatedHtml);
+      } catch {
+        // Translation failure must never abort the download itself
+      }
+      await sleep(aiSettings.downloadTranslationDelayMs);
+    }
 
     await sleep(getChapterDownloadCooldownMs());
   } else {

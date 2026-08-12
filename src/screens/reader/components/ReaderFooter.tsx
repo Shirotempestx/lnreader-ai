@@ -10,6 +10,7 @@ import Animated, {
 import { useChapterContext } from '../ChapterContext';
 import { useTheme } from '@hooks/persisted';
 import { useNovelLayout } from '@screens/novel/NovelContext';
+import { getTranslationCache } from '@services/aiTranslation/translationCache';
 
 interface ChapterFooterProps {
   openReaderSheet: () => void;
@@ -66,8 +67,28 @@ const ChapterFooter = ({
   scrollToStart,
   openDrawer,
 }: ChapterFooterProps) => {
-  const { nextChapter, prevChapter, navigateChapter } = useChapterContext();
+  const {
+    nextChapter,
+    prevChapter,
+    navigateChapter,
+    chapter,
+    translating,
+    translatedChapterText,
+    triggerTranslation,
+    clearTranslation,
+  } = useChapterContext();
   const theme = useTheme();
+  const isTranslationActive = translatedChapterText !== null || translating;
+  const isTranslationCached =
+    !translating && getTranslationCache(chapter.id) !== undefined;
+
+  const handleTranslatePress = () => {
+    if (isTranslationActive && !translating) {
+      clearTranslation();
+    } else {
+      triggerTranslation();
+    }
+  };
   const rippleConfig = {
     color: theme.rippleColor,
     borderless: true,
@@ -133,6 +154,21 @@ const ChapterFooter = ({
             icon="format-list-bulleted"
             size={26}
             iconColor={theme.onSurface}
+          />
+        </Pressable>
+        <Pressable
+          android_ripple={rippleConfig}
+          style={styles.buttonStyles}
+          onPress={handleTranslatePress}
+        >
+          <IconButton
+            icon={translating ? 'loading' : 'translate'}
+            size={26}
+            iconColor={
+              isTranslationActive || isTranslationCached
+                ? theme.primary
+                : theme.onSurface
+            }
           />
         </Pressable>
         <Pressable

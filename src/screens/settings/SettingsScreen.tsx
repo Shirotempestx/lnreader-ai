@@ -113,6 +113,16 @@ const SettingsScreen = ({ navigation }: SettingsScreenProps) => {
           }
           theme={theme}
         />
+        <List.Item
+          title="AI Translation"
+          icon="translate"
+          onPress={() =>
+            navigation.navigate('SettingsStack', {
+              screen: 'AiTranslationSettings',
+            })
+          }
+          theme={theme}
+        />
       </ScrollView>
     </SafeAreaView>
   );
