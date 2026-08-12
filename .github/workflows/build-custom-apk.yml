@@ -6,6 +6,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      NODE_ENV: production # Copilot's fix applied globally!
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -19,7 +21,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20' # Rolled back to Expo's preferred LTS version
+          node-version: '20'
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v3
@@ -37,8 +39,8 @@ jobs:
 
       - name: Compile Debug APK
         env:
-          NODE_OPTIONS: '--max-old-space-size=8192' # Forces Node to use maximum available runner memory
-        run: cd android && ./gradlew assembleDebug --stacktrace # Stacktrace will reveal exact JS errors
+          NODE_OPTIONS: '--max-old-space-size=8192' # Fixes memory crashes
+        run: cd android && ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
